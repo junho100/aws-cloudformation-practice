@@ -1,0 +1,338 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+  Generator: "former2"
+Description: ""
+Resources:
+  EC2VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.1.0.0/16"
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: "default"
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-vpc"
+
+  EC2Subnet:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: "ap-northeast-2c"
+      CidrBlock: "10.1.2.0/24"
+      VpcId: !Ref EC2VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-public-subnet2"
+
+  EC2Subnet3:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: "ap-northeast-2a"
+      CidrBlock: "10.1.1.0/24"
+      VpcId: !Ref EC2VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-public-subnet1"
+
+  EC2Subnet2:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: "ap-northeast-2a"
+      CidrBlock: "10.1.3.0/24"
+      VpcId: !Ref EC2VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-private-subnet1"
+
+  EC2Subnet4:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      CidrBlock: "10.1.4.0/24"
+      VpcId: !Ref EC2VPC
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-private-subnet2"
+
+  EC2SecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "terry-test-public-sg"
+      GroupName: "terry-test-public-sg"
+      VpcId: !Ref EC2VPC
+      SecurityGroupIngress:
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 80
+          IpProtocol: "tcp"
+          ToPort: 80
+        - CidrIp: "211.217.241.105/32"
+          Description: "gongduck_softsquared"
+          FromPort: 22
+          IpProtocol: "tcp"
+          ToPort: 22
+        - CidrIp: "0.0.0.0/0"
+          FromPort: 443
+          IpProtocol: "tcp"
+          ToPort: 443
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+
+  EC2SecurityGroup2:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      GroupDescription: "terry-test-private-sg"
+      GroupName: "terry-test-private-sg"
+      VpcId: !Ref EC2VPC
+      SecurityGroupIngress:
+        - CidrIp: !Sub "${EC2Instance.PrivateIp}/32"
+          IpProtocol: "-1"
+        - SourceSecurityGroupId: !Ref EC2SecurityGroup
+          IpProtocol: "-1"
+        - CidrIp: "10.1.3.0/24"
+          FromPort: 3306
+          IpProtocol: "tcp"
+          ToPort: 3306
+      SecurityGroupEgress:
+        - CidrIp: "0.0.0.0/0"
+          IpProtocol: "-1"
+
+  EC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: "ami-03221589fd7c8f183"
+      InstanceType: "t2.micro"
+      KeyName: "terry-test-private-ec2"
+      AvailabilityZone: !GetAtt EC2Instance2.AvailabilityZone
+      Tenancy: "default"
+      SubnetId: "subnet-086728882e8416c38"
+      EbsOptimized: false
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      SourceDestCheck: true
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            Encrypted: false
+            VolumeSize: 8
+            SnapshotId: "snap-00fed1bbdb4b0fd4b"
+            VolumeType: "gp3"
+            DeleteOnTermination: true
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-vpn-ec2"
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - ""
+            - - "#!/bin/bash -xe\n"
+              - "yum install -y aws-cfn-bootstrap
+
+                "
+              - "# Install the files and packages from the metadata\n"
+              - "/opt/aws/bin/cfn-init -v "
+              - "         --stack "
+              - Ref: AWS::StackName
+              - "         --resource WebServerInstance "
+              - "         --configsets All "
+              - "         --region "
+              - Ref: AWS::Region
+              - "\n"
+              - "# Signal the status from cfn-init\n"
+              - "/opt/aws/bin/cfn-signal -e $? "
+              - "         --stack "
+              - Ref: AWS::StackName
+              - "         --resource WebServerInstance "
+              - "         --region "
+              - Ref: AWS::Region
+              - "\n"
+
+  EC2Instance2:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: "ami-03221589fd7c8f183"
+      InstanceType: "t2.micro"
+      KeyName: "terry-test-private-ec2"
+      AvailabilityZone: !GetAtt EC2Subnet4.AvailabilityZone
+      Tenancy: "default"
+      SubnetId: "subnet-05287aec29785c939"
+      EbsOptimized: false
+      SecurityGroupIds:
+        - "sg-010633316bfaeb59a"
+      SourceDestCheck: true
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            Encrypted: false
+            VolumeSize: 8
+            SnapshotId: "snap-00fed1bbdb4b0fd4b"
+            VolumeType: "gp3"
+            DeleteOnTermination: true
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-private-ec2"
+      UserData:
+        Fn::Base64:
+          Fn::Join:
+            - ""
+            - - "#!/bin/bash -xe\n"
+              - "yum install -y aws-cfn-bootstrap
+
+                "
+              - "# Install the files and packages from the metadata\n"
+              - "/opt/aws/bin/cfn-init -v "
+              - "         --stack "
+              - Ref: AWS::StackName
+              - "         --resource WebServerInstance "
+              - "         --configsets All "
+              - "         --region "
+              - Ref: AWS::Region
+              - "\n"
+              - "# Signal the status from cfn-init\n"
+              - "/opt/aws/bin/cfn-signal -e $? "
+              - "         --stack "
+              - Ref: AWS::StackName
+              - "         --resource WebServerInstance "
+              - "         --region "
+              - Ref: AWS::Region
+              - "\n"
+
+  ElasticLoadBalancingV2LoadBalancer:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Name: "terry-test-alb"
+      Scheme: "internet-facing"
+      Type: "application"
+      Subnets:
+        - !Ref EC2Subnet
+        - !Ref EC2Subnet3
+      SecurityGroups:
+        - "sg-0f405f4bf4dd6611a"
+        - !Ref EC2SecurityGroup
+      IpAddressType: "ipv4"
+
+  ElasticLoadBalancingV2Listener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ElasticLoadBalancingV2LoadBalancer
+      Port: 80
+      Protocol: "HTTP"
+      DefaultActions:
+        - TargetGroupArn: !Sub "arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/${ElasticLoadBalancingV2LoadBalancer.LoadBalancerName}-tg/791a19ab16a73f0d"
+          Type: "forward"
+
+  ElasticLoadBalancingV2TargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/"
+      Port: 80
+      Protocol: "HTTP"
+      HealthCheckPort: "traffic-port"
+      HealthCheckProtocol: "HTTP"
+      HealthCheckTimeoutSeconds: 5
+      UnhealthyThresholdCount: 2
+      TargetType: "instance"
+      Matcher:
+        HttpCode: "200"
+      HealthyThresholdCount: 5
+      VpcId: !Ref EC2VPC
+      Name: !Sub "${ElasticLoadBalancingV2LoadBalancer.LoadBalancerName}-tg"
+      HealthCheckEnabled: true
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 80
+
+  EC2EIPAssociation:
+    Type: "AWS::EC2::EIPAssociation"
+    Properties:
+      AllocationId: !GetAtt EC2EIP.AllocationId
+      NetworkInterfaceId: "eni-02b0aaec2244edfcf"
+      PrivateIpAddress: "10.1.1.63"
+
+  EC2KeyPair:
+    Type: "AWS::EC2::KeyPair"
+    Properties:
+      KeyName: "terry-test-private-ec2"
+      KeyType: "rsa"
+
+  EC2VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref EC2InternetGateway
+      VpcId: !Ref EC2VPC
+
+  EC2NatGateway:
+    Type: "AWS::EC2::NatGateway"
+    Properties:
+      SubnetId: !Ref EC2Subnet3
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-nat"
+      AllocationId: !GetAtt EC2EIP.AllocationId
+
+  EC2InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+
+  EC2Route:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref EC2InternetGateway
+      RouteTableId: !Ref EC2RouteTable
+
+  EC2EIP:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: "vpc"
+
+  EC2RouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref EC2VPC
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-public-rt"
+
+  EC2RouteTable2:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref EC2VPC
+      Tags:
+        - Key: "Name"
+          Value: "terry-test-private-rt-1"
+
+  EC2Route2:
+    Type: "AWS::EC2::Route"
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref EC2NatGateway
+      RouteTableId: !Ref EC2RouteTable2
+
+  EC2SubnetRouteTableAssociation:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref EC2RouteTable2
+      SubnetId: !Ref EC2Subnet4
+
+  EC2SubnetRouteTableAssociation2:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref EC2RouteTable2
+      SubnetId: !Ref EC2Subnet2
+
+  EC2SubnetRouteTableAssociation3:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref EC2RouteTable
+      SubnetId: !Ref EC2Subnet
+
+  EC2SubnetRouteTableAssociation4:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      RouteTableId: !Ref EC2RouteTable
+      SubnetId: !Ref EC2Subnet3

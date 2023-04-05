@@ -155,6 +155,7 @@
       "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
     }
   },
+  "Mappings": {},
   "Resources": {
     "TerryTestVpc": {
       "Type": "AWS::EC2::VPC",

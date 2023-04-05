@@ -1,0 +1,171 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  Generator: 'former2'
+Description: ''
+Resources:
+  CodePipelineRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: '/service-role/'
+      RoleName: !Sub 'AWSCodePipelineServiceRole-${AWS::Region}-terry-test-codepipeli'
+      AssumeRolePolicyDocument: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codepipeline.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/service-role/AWSCodePipelineServiceRole-${AWS::Region}-terry-test-codepipeline'
+
+  CodeBuildRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      Path: '/service-role/'
+      RoleName: !Sub 'codebuild-${CodeBuildProject}-service-role'
+      AssumeRolePolicyDocument: '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"codebuild.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+      MaxSessionDuration: 3600
+      ManagedPolicyArns:
+        - !Sub 'arn:aws:iam::${AWS::AccountId}:policy/service-role/CodeBuildBasePolicy-${CodeBuildProject}-${AWS::Region}'
+
+  CodePipelineS3:
+
+  CodeBuildProject:
+    Type: 'AWS::CodeBuild::Project'
+    Properties:
+      Name: 'terry-test-codebuild'
+      Description: 'terry-test-codebuild'
+      Source:
+        Location: 'https://github.com/junho100/nest-typeorm-template.git'
+        Type: 'GITHUB'
+      Artifacts:
+        Type: 'NO_ARTIFACTS'
+      Environment:
+        ComputeType: 'BUILD_GENERAL1_SMALL'
+        Image: 'aws/codebuild/amazonlinux2-x86_64-standard:4.0'
+        Type: 'LINUX_CONTAINER'
+        ImagePullCredentialsType: 'CODEBUILD'
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      TimeoutInMinutes: 20
+      QueuedTimeoutInMinutes: 480
+      LogsConfig:
+        CloudWatchLogs:
+          Status: 'ENABLED'
+      Visibility: 'PRIVATE'
+
+  CodePipelinePipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      Name: 'terry-test-codepipeline'
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Location: 'terry-test-s3'
+        Type: 'S3'
+      Stages:
+        - Name: 'Source'
+          Actions:
+            - Name: 'Source'
+              OutputArtifacts:
+                - Name: 'SourceArtifact'
+              ActionTypeId:
+                Category: 'Source'
+                Owner: 'ThirdParty'
+                Provider: 'GitHub'
+                Version: '1'
+              Configuration:
+                Branch: 'feature/no-db'
+                OAuthToken: '****'
+                Owner: 'junho100'
+                Repo: 'nest-typeorm-template'
+              Region: 'ap-northeast-2'
+              Namespace: 'SourceVariables'
+              RunOrder: 1
+        - Name: 'Build'
+          Actions:
+            - Name: 'Build'
+              ActionTypeId:
+                Category: 'Build'
+                Owner: 'AWS'
+                Provider: 'CodeBuild'
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: 'SourceArtifact'
+              OutputArtifacts:
+                - Name: 'BuildArtifact'
+              Region: !Ref AWS::Region
+              Namespace: 'BuildVariables'
+              RunOrder: 1
+        - Name: 'Deploy'
+          Actions:
+            - Name: 'Deploy'
+              ActionTypeId:
+                Category: 'Deploy'
+                Owner: 'AWS'
+                Provider: 'ElasticBeanstalk'
+                Version: '1'
+              Configuration:
+                ApplicationName: 'terry-test-eb'
+                EnvironmentName: 'Terrytesteb-env'
+              InputArtifacts:
+                - Name: 'BuildArtifact'
+              Region: !Ref AWS::Region
+              Namespace: 'DeployVariables'
+              RunOrder: 1
+
+  ElasticBeanstalkApplication:
+    Type: 'AWS::ElasticBeanstalk::Application'
+    Properties:
+      ApplicationName: 'terry-test-eb'
+
+  ElasticBeanstalkEnvironment:
+    Type: 'AWS::ElasticBeanstalk::Environment'
+    Properties:
+      EnvironmentName: 'Terrytesteb-env'
+      ApplicationName: 'terry-test-eb'
+      VersionLabel: 'code-pipeline-1680676418014-BuildArtifact-a75c4f39-da48-4c6d-8497-6d2d1573745e'
+      SolutionStackName: '64bit Amazon Linux 2 v5.8.0 running Node.js 18'
+      PlatformArn: !Sub 'arn:aws:elasticbeanstalk:${AWS::Region}::platform/Node.js 18 running on 64bit Amazon Linux 2/5.8.0'
+      Tier:
+        Name: 'WebServer'
+        Type: 'Standard'
+        Version: '1.0'
+      CNAMEPrefix: 'Terrytesteb-env'
+      Tags:
+        - Key: 'elasticbeanstalk:environment-name'
+          Value: 'Terrytesteb-env'
+        - Key: 'elasticbeanstalk:environment-id'
+          Value: 'e-whynmtyfmk'
+        - Key: 'Name'
+          Value: 'Terrytesteb-env'
+
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: 'terry-test-codepipeline'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+            BucketKeyEnabled: false
+
+  S3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Id: 'SSEAndSSLPolicy'
+        Statement:
+          - Sid: 'DenyUnEncryptedObjectUploads'
+            Effect: 'Deny'
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: 'DenyInsecureConnections'
+            Effect: 'Deny'
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub 'arn:aws:s3:::${S3Bucket}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
